@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: seo_intelligence
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d seo_intelligence"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/seo_intelligence
+      CORS_ORIGINS: http://localhost:3001
+      AUTH_ENABLED: "true"
+      JWT_SECRET: ${JWT_SECRET:-local-docker-jwt-secret-change-me-123456}
+      JWT_EXPIRES_IN: 7d
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-replace-me}
+      DATAFORSEO_LOGIN: ${DATAFORSEO_LOGIN:-replace-me}
+      DATAFORSEO_PASSWORD: ${DATAFORSEO_PASSWORD:-replace-me}
+      SERP_MAX_CONCURRENT_REQUESTS: ${SERP_MAX_CONCURRENT_REQUESTS:-3}
+      SERP_REQUEST_DELAY_MS: ${SERP_REQUEST_DELAY_MS:-300}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-replace-me}
+      SUPABASE_PROJECT_URL: ${SUPABASE_PROJECT_URL:-https://example.supabase.co}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-replace-me}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000
+    environment:
+      PORT: 3001
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

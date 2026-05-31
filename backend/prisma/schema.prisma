@@ -1,0 +1,928 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ResultQuality {
+  PROCESSABLE
+  BLOCKED
+  CAPTCHA
+  USER_GENERATED
+  VIDEO
+  MARKETPLACE
+  LOW_CONTENT
+  FORUM
+  PDF
+}
+
+enum SnapshotDiffChangeType {
+  ADDED
+  REMOVED
+  CHANGED
+  UNCHANGED
+}
+
+// ============================================================================
+// ORGANIZATIONAL MODELS
+// ============================================================================
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  domain      String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  keywords         Keyword[]
+  competitors      Competitor[]
+  serpSnapshots    SerpSnapshot[]
+  crawledPages     CrawledPage[]
+  pageAnalyses     PageAnalysis[]
+  pageSnapshots    PageSnapshot[]
+  pages            Page[]
+  entities         Entity[]
+  keywordSnapshots KeywordSnapshot[]
+  sitemapSnapshots SitemapSnapshot[]
+
+  @@index([userId])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  projects Project[]
+}
+
+// ============================================================================
+// KEYWORD & SERP MODELS
+// ============================================================================
+
+model Keyword {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  keyword      String
+  locationCode Int?    @default(2840)
+  languageCode String  @default("en")
+  device       String  @default("desktop")
+  intent       String? // e.g., "informational", "commercial", "transactional"
+  volume       Int? // monthly search volume
+  difficulty   Int? // SEO difficulty score
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  serpSnapshots  SerpSnapshot[]
+  crawledPages   CrawledPage[]
+  pageAnalyses   PageAnalysis[]
+  keywordMetrics KeywordMetric[]
+  semanticGroups SemanticKeywordGroup[]
+
+  @@unique([projectId, keyword, locationCode, languageCode, device])
+  @@index([projectId])
+}
+
+model SerpSnapshot {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  keywordId String
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  // Top 10 results
+  results SerpResult[]
+
+  provider            String   @default("dataforseo")
+  rawResponse         Json?
+  requestDurationMs   Int?
+  totalResults        Int?
+  organicResultsCount Int      @default(0)
+  resultTypes         String[] @default([])
+  status              String   @default("success")
+  errorMessage        String?
+
+  collectedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@index([projectId])
+  @@index([keywordId])
+  @@index([collectedAt])
+}
+
+model SerpResult {
+  id String @id @default(cuid())
+
+  serpSnapshotId String
+  serpSnapshot   SerpSnapshot @relation(fields: [serpSnapshotId], references: [id], onDelete: Cascade)
+
+  position     Int
+  url          String?
+  domain       String?
+  title        String?
+  description  String?
+  sitelinks    String? // JSON array
+  snippet      String?
+  rankGroup    Int?
+  rankAbsolute Int?
+  xpath        String?
+  itemType     String  @default("organic")
+  breadcrumb   String?
+  isFeatured   Boolean @default(false)
+  isPaid       Boolean @default(false)
+
+  crawledPages CrawledPage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([serpSnapshotId])
+}
+
+model CrawledPage {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  keywordId String
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  serpResultId String?
+  serpResult   SerpResult? @relation(fields: [serpResultId], references: [id], onDelete: SetNull)
+
+  status          String   @default("pending")
+  error           String?
+  position        Int?
+  url             String
+  domain          String?
+  title           String?
+  metaDescription String?
+  canonical       String?
+  schema          Json?
+  headings        Json?
+  internalLinks   String[]
+  bodyContent     String?  @db.Text
+  raw             Json?
+
+  analysis PageAnalysis?
+
+  crawledAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([keywordId])
+  @@index([serpResultId])
+  @@index([status])
+}
+
+model PageAnalysis {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  keywordId String
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  crawledPageId String      @unique
+  crawledPage   CrawledPage @relation(fields: [crawledPageId], references: [id], onDelete: Cascade)
+
+  status        String  @default("pending")
+  error         String?
+  summary       String? @db.Text
+  scores        Json?
+  gaps          Json?
+  opportunities Json?
+  raw           Json?
+  tokensUsed    Int     @default(0)
+
+  analyzedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([keywordId])
+  @@index([status])
+}
+
+// ============================================================================
+// PAGE & CONTENT MODELS
+// ============================================================================
+
+model Page {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  url    String
+  domain String
+  title  String?
+
+  snapshots PageSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, url])
+  @@index([projectId])
+}
+
+model PageSnapshot {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  // Raw content
+  markdown  String? @db.Text
+  cleanText String? @db.Text
+  html      String? @db.Text
+
+  // Metadata
+  metadata Json?
+
+  // Headings extracted
+  h1 String[]
+  h2 String[]
+  h3 String[]
+
+  // Links
+  internalLinks String[] // JSON array of URLs
+  externalLinks String[] // JSON array of URLs
+
+  // Firecrawl response hash - for change detection
+  contentHash  String?
+  lastModified DateTime?
+
+  // SEO & keyword metrics for this snapshot
+  seoMetrics     SeoMetric?
+  keywordMetrics KeywordMetric[]
+
+  // AI analysis
+  aiAnalysis AIAnalysis?
+
+  // Entities found in this snapshot
+  entityMetrics EntityMetric[]
+
+  // Historical diffs
+  historicalDiffs HistoricalDiff[]
+
+  snapshotDate DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  @@index([projectId])
+  @@index([pageId])
+  @@index([snapshotDate])
+}
+
+// ============================================================================
+// SEO METRICS MODELS
+// ============================================================================
+
+model SeoMetric {
+  id String @id @default(cuid())
+
+  pageSnapshotId String       @unique
+  pageSnapshot   PageSnapshot @relation(fields: [pageSnapshotId], references: [id], onDelete: Cascade)
+
+  // Content metrics
+  wordCount         Int
+  paragraphCount    Int
+  sentenceCount     Int
+  avgSentenceLength Float
+
+  // Readability
+  readingScore Float? // e.g., Flesch reading ease
+
+  // Heading structure
+  h1Count Int
+  h2Count Int
+  h3Count Int
+
+  // Advanced heading analysis
+  headingKeywords  String[] // Keywords found in headings
+  headingFrequency Json? // Frequency map of heading keywords
+
+  // Section analysis
+  totalSections    Int
+  avgSectionLength Float
+  sectionTitles    String[]
+
+  // Content patterns
+  faqSectionExists      Boolean
+  comparisonTableExists Boolean
+  prosConsExists        Boolean
+  reviewBlocksExists    Boolean
+
+  // Link analysis
+  internalLinkCount   Int
+  externalLinkCount   Int
+  anchorTextFrequency Json? // Map of anchor text -> frequency
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([pageSnapshotId])
+}
+
+// ============================================================================
+// KEYWORD METRICS MODELS
+// ============================================================================
+
+model KeywordMetric {
+  id String @id @default(cuid())
+
+  pageSnapshotId String
+  pageSnapshot   PageSnapshot @relation(fields: [pageSnapshotId], references: [id], onDelete: Cascade)
+
+  keywordId String
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  // Frequency analysis
+  exactKeywordFrequency   Int
+  partialKeywordFrequency Int
+  keywordDensity          Float
+
+  // Position tracking
+  keywordPositions    Int[] // Positions in text where keyword appears
+  firstOccurrence     Int? // Character position
+  lastOccurrence      Int? // Character position
+  firstOccurrenceWord Int? // Word position
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([pageSnapshotId, keywordId])
+  @@index([pageSnapshotId])
+  @@index([keywordId])
+}
+
+// ============================================================================
+// SEMANTIC & ENTITY MODELS
+// ============================================================================
+
+model SemanticKeywordGroup {
+  id String @id @default(cuid())
+
+  keywordId String
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  // Semantic category
+  category String // e.g., "trust", "speed", "privacy", "crypto", "bonuses", "gambling_intent"
+
+  // Keywords in this semantic group
+  keywords String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([keywordId])
+  @@index([category])
+}
+
+model Entity {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name String
+  type String // "brand", "crypto_coin", "casino_provider", "feature", "product"
+
+  metrics EntityMetric[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, name, type])
+  @@index([projectId])
+  @@index([type])
+}
+
+model EntityMetric {
+  id String @id @default(cuid())
+
+  pageSnapshotId String
+  pageSnapshot   PageSnapshot @relation(fields: [pageSnapshotId], references: [id], onDelete: Cascade)
+
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  frequency Int // How many times this entity appears
+  positions Int[] // Word positions where entity appears
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([pageSnapshotId, entityId])
+  @@index([pageSnapshotId])
+  @@index([entityId])
+}
+
+// ============================================================================
+// AI ANALYSIS MODELS
+// ============================================================================
+
+model AIAnalysis {
+  id String @id @default(cuid())
+
+  pageSnapshotId String       @unique
+  pageSnapshot   PageSnapshot @relation(fields: [pageSnapshotId], references: [id], onDelete: Cascade)
+
+  // Topical analysis
+  topicalClusters String[] // Main topical groups covered
+  topicalDepth    Float? // 0-100 scale: how deep the coverage is
+  missingTopics   String[] // Topics not covered that competitors have
+
+  // Quality scoring
+  expertiseScore Float // 0-100: E-E-A-T expertise dimension
+  trustScore     Float // 0-100: E-E-A-T trust dimension
+  authorityScore Float? // 0-100: Authority dimension
+
+  // Intent analysis
+  primaryIntent    String? // e.g., "informational", "commercial"
+  secondaryIntents String[]
+
+  // Content quality
+  isAiGenerated Boolean? // AI-detected content generation
+  originality   Float? // 0-100: uniqueness score
+
+  // Strategic summary
+  summary String? @db.Text
+
+  // Cost tracking
+  tokensCost Int // Total tokens used for analysis
+
+  analyzedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([pageSnapshotId])
+}
+
+// ============================================================================
+// HISTORICAL DIFF MODELS
+// ============================================================================
+
+model HistoricalDiff {
+  id String @id @default(cuid())
+
+  pageSnapshotId String
+  pageSnapshot   PageSnapshot @relation(fields: [pageSnapshotId], references: [id], onDelete: Cascade)
+
+  // Reference to previous snapshot for comparison
+  previousSnapshotId String?
+
+  // Structural changes
+  wordCountDelta Int?
+  headingChanges String[] // Changes to headings
+  sectionChanges String[] // New/removed/modified sections
+
+  // Entity changes
+  newEntities     String[]
+  removedEntities String[]
+  changedEntities String[]
+
+  // Semantic shifts
+  semanticShifts String[] // Changes in semantic groups
+
+  // Content expansion
+  topicalExpansion String[] // New topics added
+  topicalReduction String[] // Topics removed
+
+  // Intent changes
+  intentChanges String[]
+
+  // Change severity (0-100)
+  changeSeverity Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([pageSnapshotId])
+}
+
+// ============================================================================
+// COMPETITOR MODELS
+// ============================================================================
+
+model Competitor {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  domain String
+  name   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, domain])
+  @@index([projectId])
+}
+
+// ============================================================================
+// QUEUE & JOB MODELS (for Bull integration)
+// ============================================================================
+
+model QueuedJob {
+  id String @id @default(cuid())
+
+  jobType String // "serp_collection", "firecrawl", "seo_analysis", "ai_analysis", etc.
+  status  String // "pending", "processing", "completed", "failed"
+
+  // Reference IDs for this job
+  projectId      String?
+  keywordId      String?
+  pageSnapshotId String?
+
+  // Job payload
+  payload Json
+
+  // Error tracking
+  error       String?
+  attempts    Int     @default(0)
+  maxAttempts Int     @default(3)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  processedAt DateTime?
+
+  @@index([jobType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// CONTENT NORMALIZATION & CACHING
+// ============================================================================
+
+model ContentCache {
+  id String @id @default(cuid())
+
+  contentHash String @unique
+
+  // Normalized content
+  normalizedText String? @db.Text
+
+  // Cached metrics (to avoid recalculation)
+  wordCount      Int?
+  sentenceCount  Int?
+  paragraphCount Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([contentHash])
+}
+
+// ============================================================================
+// SERP COMPETITOR INTELLIGENCE SNAPSHOTS
+// ============================================================================
+
+model KeywordSnapshot {
+  id        String   @id @default(cuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  keyword      String
+  locationCode Int    @default(2840)
+  languageCode String @default("en")
+  device       String @default("desktop")
+
+  provider            String  @default("dataforseo")
+  status              String  @default("success")
+  errorMessage        String?
+  requestDurationMs   Int?
+  totalResults        Int?
+  organicResultsCount Int     @default(0)
+  rawSerpResponse     Json?
+
+  competitorSnapshots CompetitorSnapshot[]
+  rankingHistory      RankingHistory[]
+  volatilitySnapshot  SerpVolatilitySnapshot?
+  aiAssumptions       AiAssumption[]
+
+  capturedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([keyword])
+  @@index([capturedAt])
+}
+
+model CompetitorSnapshot {
+  id                String          @id @default(cuid())
+  keywordSnapshotId String
+  keywordSnapshot   KeywordSnapshot @relation(fields: [keywordSnapshotId], references: [id], onDelete: Cascade)
+
+  position        Int
+  url             String
+  domain          String
+  rankingUrl      String?
+  normalizedUrl   String?
+  urlHash         String?
+  title           String?
+  snippet         String?
+  metaDescription String?
+
+  crawlStatus      String    @default("pending")
+  crawlError       String?
+  crawlDurationMs  Int?
+  crawledAt        DateTime?
+  rawCrawlResponse Json?
+
+  resultQuality        ResultQuality @default(PROCESSABLE)
+  extractionConfidence Int?
+  renderQualityScore   Int?
+  processingSkipped    Boolean       @default(false)
+  skipReason           String?
+  protectionType       String?
+  blockedBy            String?
+  partialExtraction    Boolean       @default(false)
+
+  extractedFeatures ExtractedFeatures?
+  rankingHistory    RankingHistory[]
+  currentDiffs      SnapshotDiff[]         @relation("CurrentCompetitorSnapshotDiff")
+  previousDiffs     SnapshotDiff[]         @relation("PreviousCompetitorSnapshotDiff")
+  internalLinkItems InternalLinkSnapshot[]
+  aiAssumptions     AiAssumption[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([keywordSnapshotId])
+  @@index([domain])
+  @@index([urlHash])
+  @@index([normalizedUrl])
+  @@index([position])
+  @@index([resultQuality])
+  @@index([processingSkipped])
+}
+
+model ExtractedFeatures {
+  id                   String             @id @default(cuid())
+  competitorSnapshotId String             @unique
+  competitorSnapshot   CompetitorSnapshot @relation(fields: [competitorSnapshotId], references: [id], onDelete: Cascade)
+
+  // SEO
+  title             String?
+  metaDescription   String?
+  h1Count           Int     @default(0)
+  h2Count           Int     @default(0)
+  h3Count           Int     @default(0)
+  wordCount         Int     @default(0)
+  faqCount          Int     @default(0)
+  tableCount        Int     @default(0)
+  schemaPresent     Boolean @default(false)
+  extractionQuality String  @default("extraction_success")
+
+  // Keyword/Semantic
+  primaryEntities           String[] @default([])
+  recurringMoneyKeywords    String[] @default([])
+  semanticClusters          Json?
+  keywordUsageFrequency     Json?
+  textKeywordPhrases        String[] @default([])
+  seoKeywordPhrases         String[] @default([])
+  keywordPhraseFrequency    Json?
+  seoKeywordPhraseFrequency Json?
+  keywordUsageChange        Json?
+
+  // CRO
+  ctaCount        Int      @default(0)
+  ctaWording      String[] @default([])
+  urgencyWording  String[] @default([])
+  bonusStructures String[] @default([])
+  percentages     String[] @default([])
+  currencies      String[] @default([])
+
+  // Trust
+  kycMentions   Boolean  @default(false)
+  licenses      String[] @default([])
+  provablyFair  Boolean  @default(false)
+  wallets       String[] @default([])
+  reviewSchema  Boolean  @default(false)
+  trustSignals  String[] @default([])
+  moneyKeywords String[] @default([])
+
+  // Internal Linking
+  internalLinksCount Int      @default(0)
+  anchorTexts        String[] @default([])
+  hubPageReferences  String[] @default([])
+
+  // Freshness
+  updatedYearMentions String[] @default([])
+  latestBonuses       String[] @default([])
+  recentReleases      String[] @default([])
+  freshnessSignals    String[] @default([])
+
+  // GEO
+  hreflang            String[] @default([])
+  localizedCurrencies String[] @default([])
+  countryTargeting    String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([competitorSnapshotId])
+}
+
+model RankingHistory {
+  id                   String              @id @default(cuid())
+  keywordSnapshotId    String
+  keywordSnapshot      KeywordSnapshot     @relation(fields: [keywordSnapshotId], references: [id], onDelete: Cascade)
+  competitorSnapshotId String?
+  competitorSnapshot   CompetitorSnapshot? @relation(fields: [competitorSnapshotId], references: [id], onDelete: SetNull)
+
+  keyword          String
+  domain           String
+  url              String
+  position         Int
+  previousPosition Int?
+  positionDelta    Int?
+
+  capturedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([keywordSnapshotId])
+  @@index([competitorSnapshotId])
+  @@index([keyword, domain])
+  @@index([capturedAt])
+}
+
+model SnapshotDiff {
+  id String @id @default(cuid())
+
+  currentCompetitorSnapshotId String
+  currentCompetitorSnapshot   CompetitorSnapshot @relation("CurrentCompetitorSnapshotDiff", fields: [currentCompetitorSnapshotId], references: [id], onDelete: Cascade)
+
+  previousCompetitorSnapshotId String?
+  previousCompetitorSnapshot   CompetitorSnapshot? @relation("PreviousCompetitorSnapshotDiff", fields: [previousCompetitorSnapshotId], references: [id], onDelete: SetNull)
+
+  field      String
+  category   String
+  changeType SnapshotDiffChangeType
+
+  previousValue Json?
+  currentValue  Json?
+  delta         Json?
+  severity      Int   @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([currentCompetitorSnapshotId])
+  @@index([previousCompetitorSnapshotId])
+  @@index([category])
+  @@index([field])
+}
+
+model InternalLinkSnapshot {
+  id                   String             @id @default(cuid())
+  competitorSnapshotId String
+  competitorSnapshot   CompetitorSnapshot @relation(fields: [competitorSnapshotId], references: [id], onDelete: Cascade)
+
+  sourceUrl      String
+  destinationUrl String
+  normalizedUrl  String?
+  anchorText     String?
+  isHubReference Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([competitorSnapshotId])
+  @@index([normalizedUrl])
+  @@index([anchorText])
+}
+
+model SerpVolatilitySnapshot {
+  id                String          @id @default(cuid())
+  keywordSnapshotId String          @unique
+  keywordSnapshot   KeywordSnapshot @relation(fields: [keywordSnapshotId], references: [id], onDelete: Cascade)
+
+  keyword           String
+  volatilityScore   Int
+  averageMove       Float?
+  newEntrants       String[] @default([])
+  droppedDomains    String[] @default([])
+  stableDomains     String[] @default([])
+  rankingMomentum   Json?
+  turbulenceMetrics Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([keyword])
+  @@index([volatilityScore])
+}
+
+model SitemapSnapshot {
+  id        String   @id @default(cuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  domain            String
+  robotsUrl         String
+  sitemapUrls       String[] @default([])
+  status            String   @default("success")
+  errorMessage      String?
+  requestDurationMs Int?
+
+  totalUrls          Int      @default(0)
+  addedUrlsCount     Int      @default(0)
+  removedUrlsCount   Int      @default(0)
+  changedUrlsCount   Int      @default(0)
+  freshnessVelocity  Int      @default(0)
+  semanticClusters   Json?
+  categoryExpansions String[] @default([])
+  rawRobotsTxt       String?  @db.Text
+
+  urls  SitemapUrl[]
+  diffs SitemapDiff[]
+
+  capturedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([domain])
+  @@index([capturedAt])
+}
+
+model SitemapUrl {
+  id                String          @id @default(cuid())
+  sitemapSnapshotId String
+  sitemapSnapshot   SitemapSnapshot @relation(fields: [sitemapSnapshotId], references: [id], onDelete: Cascade)
+
+  url             String
+  normalizedUrl   String
+  urlHash         String
+  path            String
+  lastmod         DateTime?
+  changefreq      String?
+  priority        Float?
+  semanticCluster String?
+
+  createdAt DateTime @default(now())
+
+  @@index([sitemapSnapshotId])
+  @@index([urlHash])
+  @@index([semanticCluster])
+}
+
+model SitemapDiff {
+  id                String          @id @default(cuid())
+  sitemapSnapshotId String
+  sitemapSnapshot   SitemapSnapshot @relation(fields: [sitemapSnapshotId], references: [id], onDelete: Cascade)
+
+  url             String
+  urlHash         String
+  changeType      SnapshotDiffChangeType
+  previousValue   Json?
+  currentValue    Json?
+  semanticCluster String?
+
+  createdAt DateTime @default(now())
+
+  @@index([sitemapSnapshotId])
+  @@index([urlHash])
+  @@index([changeType])
+  @@index([semanticCluster])
+}
+
+model AiAssumption {
+  id                   String              @id @default(cuid())
+  competitorSnapshotId String?
+  competitorSnapshot   CompetitorSnapshot? @relation(fields: [competitorSnapshotId], references: [id], onDelete: SetNull)
+  keywordSnapshotId    String?
+  keywordSnapshot      KeywordSnapshot?    @relation(fields: [keywordSnapshotId], references: [id], onDelete: SetNull)
+
+  assumptionType String
+  summary        String  @db.Text
+  confidence     Int     @default(0)
+  evidence       Json?
+  model          String?
+  rawResponse    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([competitorSnapshotId])
+  @@index([keywordSnapshotId])
+  @@index([assumptionType])
+}
