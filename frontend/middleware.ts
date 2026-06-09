@@ -2,6 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 const protectedPrefixes = ['/dashboard', '/projects', '/keywords', '/snapshots', '/settings'];
 
 export function middleware(request: NextRequest) {
+  const authEnabled = process.env.NEXT_PUBLIC_AUTH_ENABLED === 'true';
+  if (!authEnabled) {
+    return NextResponse.next();
+  }
+
   const hasSession = Boolean(request.cookies.get('seo_token'));
   const isProtected = protectedPrefixes.some((prefix) => request.nextUrl.pathname.startsWith(prefix));
 
