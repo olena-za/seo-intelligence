@@ -22,6 +22,6 @@ export const validationSchema = Joi.object({
     .default(3),
   SERP_REQUEST_DELAY_MS: Joi.number().integer().min(0).default(300),
   FIRECRAWL_API_KEY: Joi.string().required(),
-  SUPABASE_PROJECT_URL: Joi.string().uri().required(),
-  SUPABASE_SERVICE_ROLE_KEY: Joi.string().required(),
+  SUPABASE_PROJECT_URL: Joi.string().uri().optional().allow(''),
+  SUPABASE_SERVICE_ROLE_KEY: Joi.string().optional().allow(''),
 });
