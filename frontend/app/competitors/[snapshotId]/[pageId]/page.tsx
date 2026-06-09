@@ -72,11 +72,12 @@ export default async function CompetitorPageDetail({ params }: { params: Promise
   const hasPreviousCheck = Boolean(page.previousCheck);
   const hasMovement = typeof latestRanking?.positionDelta === 'number' && latestRanking.positionDelta !== 0;
   const lastMovementRow = !hasMovement
-    ? (page.positionHistory ?? []).find((row) => typeof row.positionDelta === 'number' && row.positionDelta !== 0 && row.competitorSnapshotId !== page.id) ?? null
+    ? (page.positionHistory ?? []).find((row) => typeof row.positionDelta === 'number' && row.positionDelta !== 0 && row.competitorSnapshotId && row.competitorSnapshotId !== page.id) ?? null
     : null;
-  const lastMovementPage = lastMovementRow ? await getPageDetail(lastMovementRow.competitorSnapshotId) : null;
+  const lastMovementPage = lastMovementRow?.competitorSnapshotId ? await getPageDetail(lastMovementRow.competitorSnapshotId) : null;
   const assumptionSource = hasMovement || !lastMovementPage ? page : lastMovementPage;
   const htmlInternalLinks = filterHtmlInternalLinks(page.internalLinkItems ?? []);
+  const internalLinkCount = htmlInternalLinks.length || (features?.internalLinksCount ?? 0);
   const filteredAnchorTexts = normalizeAnchorTexts(features?.anchorTexts ?? []).slice(0, 30);
   const filteredHubReferences = (features?.hubPageReferences ?? []).filter(isLikelyHtmlPageUrl).slice(0, 20);
   const comparisonWindow = hasPreviousCheck
@@ -148,7 +149,7 @@ export default async function CompetitorPageDetail({ params }: { params: Promise
           </Section>
 
           <Section title="Internal linking" description="Internal anchors and hub references from the crawled page.">
-            <MetricGrid items={[['Internal link count', String(htmlInternalLinks.length || features?.internalLinksCount ?? 0)]]} />
+            <MetricGrid items={[['Internal link count', String(internalLinkCount)]]} />
             <TagGroup label="Anchor texts" values={filteredAnchorTexts} />
             <TagGroup label="Hub references" values={filteredHubReferences} />
             <InternalLinksTable rows={htmlInternalLinks} />
