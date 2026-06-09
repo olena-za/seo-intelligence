@@ -10,9 +10,9 @@ export const validationSchema = Joi.object({
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN: Joi.string().default('7d'),
   DATABASE_URL: Joi.string().uri().required(),
-  OPENAI_API_KEY: Joi.string().required(),
-  DATAFORSEO_LOGIN: Joi.string().required(),
-  DATAFORSEO_PASSWORD: Joi.string().required(),
+  OPENAI_API_KEY: Joi.string().optional().allow(''),
+  DATAFORSEO_LOGIN: Joi.string().optional().allow(''),
+  DATAFORSEO_PASSWORD: Joi.string().optional().allow(''),
   DATAFORSEO_API_KEY: Joi.string().optional(),
   DATAFORSEO_API_SECRET: Joi.string().optional(),
   SERP_MAX_CONCURRENT_REQUESTS: Joi.number()
@@ -21,7 +21,7 @@ export const validationSchema = Joi.object({
     .max(20)
     .default(3),
   SERP_REQUEST_DELAY_MS: Joi.number().integer().min(0).default(300),
-  FIRECRAWL_API_KEY: Joi.string().required(),
+  FIRECRAWL_API_KEY: Joi.string().optional().allow(''),
   SUPABASE_PROJECT_URL: Joi.string().uri().optional().allow(''),
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().optional().allow(''),
 });
