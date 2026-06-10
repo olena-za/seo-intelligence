@@ -36,13 +36,14 @@ export async function apiFetch<T>(path: string, options: ApiClientOptions = {}):
 export async function apiRequest(path: string, options: ApiClientOptions = {}): Promise<Response> {
   const { retries = 2, timeoutMs = 8000, ...fetchOptions } = options;
   let lastError: unknown;
+  const baseUrl = typeof window === 'undefined' ? API_BASE_URL : '/api/backend';
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch(`${API_BASE_URL}${path}`, {
+      const response = await fetch(`${baseUrl}${path}`, {
         cache: 'no-store',
         ...fetchOptions,
         signal: controller.signal,
