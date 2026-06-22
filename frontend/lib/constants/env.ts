@@ -4,7 +4,13 @@ type FrontendEnv = {
 };
 
 function readEnv(): FrontendEnv {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL ??
+    (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : '');
+
+  if (!apiUrl) {
+    throw new Error('NEXT_PUBLIC_API_URL is required in production.');
+  }
 
   try {
     new URL(apiUrl);

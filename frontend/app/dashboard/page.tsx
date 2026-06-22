@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getProjects } from '@/lib/api';
+import { API_BASE_URL } from '@/lib/constants/env';
 import { DashboardMetrics } from '@/features/dashboard/components/DashboardMetrics';
 import { ActivityFeed } from '@/features/dashboard/components/ActivityFeed';
 import { RecentJobs } from '@/features/dashboard/components/RecentJobs';
@@ -12,7 +13,7 @@ export default async function DashboardPage() {
   try {
     projects = await getProjects();
   } catch {
-    error = 'Unable to load projects from http://localhost:3000/projects. Dashboard metrics are unavailable until the backend is running.';
+    error = `Unable to load projects from ${API_BASE_URL}/projects. Dashboard metrics are unavailable until the backend is reachable.`;
   }
 
   const totalProjects = projects.length;

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 import { formatDate, getProjects, type Project } from '@/lib/api';
+import { API_BASE_URL } from '@/lib/constants/env';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +16,7 @@ export default async function ProjectsPage() {
   try {
     projects = await getProjects();
   } catch {
-    error = 'Unable to load projects from http://localhost:3000/projects. Confirm the backend is running on port 3000.';
+    error = `Unable to load projects from ${API_BASE_URL}/projects. Confirm the configured backend is reachable.`;
   }
 
   return (
