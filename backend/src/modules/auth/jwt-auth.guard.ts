@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { JwtUser } from './types/auth.types';
 import { DEVELOPMENT_PUBLIC_ROUTE } from './development-public.decorator';
@@ -15,9 +16,22 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly reflector: Reflector,
+    private readonly configService: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context
+      .switchToHttp()
+      .getRequest<Request & { user?: JwtUser }>();
+
+    if (!this.configService.get<boolean>('authEnabled', true)) {
+      request.user = {
+        sub: undefined as unknown as string,
+        email: 'public@seo-intelligence.local',
+      };
+      return true;
+    }
+
     const isDevelopmentPublic = this.reflector.getAllAndOverride<boolean>(
       DEVELOPMENT_PUBLIC_ROUTE,
       [context.getHandler(), context.getClass()],
@@ -27,9 +41,6 @@ export class JwtAuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context
-      .switchToHttp()
-      .getRequest<Request & { user?: JwtUser }>();
     const token = this.extractToken(request);
 
     if (!token) {
