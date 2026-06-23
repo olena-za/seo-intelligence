@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { CompetitorKeywordSnapshot, CompetitorSnapshotRow } from '@/types/competitor-intelligence';
+import { API_BASE_URL } from '@/lib/constants/env';
 
 type EvidenceRow = {
   signal: string;
@@ -29,19 +30,25 @@ type AssumptionRow = {
 };
 
 async function getSnapshot(snapshotId: string): Promise<CompetitorKeywordSnapshot | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const response = await fetch(`${baseUrl}/api/competitor-intelligence/snapshots/${snapshotId}`, { cache: 'no-store' });
+  const response = await fetch(`${API_BASE_URL}/competitor-intelligence/snapshots/${snapshotId}`, { cache: 'no-store' });
 
   if (!response.ok) return null;
-  return response.json();
+  return unwrapApiResponse<CompetitorKeywordSnapshot>(await response.json());
 }
 
 async function getPageDetail(pageId: string): Promise<CompetitorSnapshotRow | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const response = await fetch(`${baseUrl}/api/competitor-intelligence/pages/${pageId}`, { cache: 'no-store' });
+  const response = await fetch(`${API_BASE_URL}/competitor-intelligence/pages/${pageId}`, { cache: 'no-store' });
 
   if (!response.ok) return null;
-  return response.json();
+  return unwrapApiResponse<CompetitorSnapshotRow>(await response.json());
+}
+
+function unwrapApiResponse<T>(payload: T | { data?: T }): T {
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return payload.data as T;
+  }
+
+  return payload as T;
 }
 
 export default async function CompetitorPageDetail({ params }: { params: Promise<{ snapshotId: string; pageId: string }> }) {
