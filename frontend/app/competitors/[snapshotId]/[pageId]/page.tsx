@@ -83,6 +83,9 @@ export default async function CompetitorPageDetail({ params }: { params: Promise
     : null;
   const lastMovementPage = lastMovementRow?.competitorSnapshotId ? await getPageDetail(lastMovementRow.competitorSnapshotId) : null;
   const assumptionSource = hasMovement || !lastMovementPage ? page : lastMovementPage;
+  const assumptionCapturedAt = assumptionSource.capturedAt ?? snapshot.capturedAt;
+  const assumptionKeyword = assumptionSource.keyword ?? snapshot.keyword;
+  const isShowingHistoricalAssumption = assumptionSource.id !== page.id;
   const htmlInternalLinks = filterHtmlInternalLinks(page.internalLinkItems ?? []);
   const internalLinkCount = htmlInternalLinks.length || (features?.internalLinksCount ?? 0);
   const filteredAnchorTexts = normalizeAnchorTexts(features?.anchorTexts ?? []).slice(0, 30);
@@ -91,8 +94,8 @@ export default async function CompetitorPageDetail({ params }: { params: Promise
     ? `${formatDateTime(page.previousCheck?.capturedAt)} to ${formatDateTime(snapshot.capturedAt)}`
     : null;
   const hasDiffRows = (page.diffs ?? []).length > 0;
-  const correlationAssumption = buildCorrelationAssumption(assumptionSource, snapshot.capturedAt);
-  const serpConclusion = buildSerpChangeConclusion(assumptionSource, snapshot.keyword);
+  const correlationAssumption = buildCorrelationAssumption(assumptionSource, assumptionCapturedAt);
+  const serpConclusion = buildSerpChangeConclusion(assumptionSource, assumptionKeyword);
 
   return (
     <div className="space-y-6">
@@ -115,7 +118,7 @@ export default async function CompetitorPageDetail({ params }: { params: Promise
         </div>
       </div>
 
-      <SerpConclusionPanel conclusion={hasMovement ? serpConclusion : null} />
+      <SerpConclusionPanel conclusion={serpConclusion} isHistorical={isShowingHistoricalAssumption} />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
         <div className="space-y-5">
@@ -205,7 +208,7 @@ export default async function CompetitorPageDetail({ params }: { params: Promise
         </div>
       </div>
 
-      <Section title="AI assumptions" description={hasMovement ? "Strategic assumptions generated only from stored ranking and content evidence." : "No movement on this check. Showing assumptions from the most recent check with movement."}>
+      <Section title="AI assumptions" description={isShowingHistoricalAssumption ? "No movement on this check. Preserving the most recent movement assumption and impact summary." : "Strategic assumptions generated only from stored ranking and content evidence."}>
         <AssumptionList rows={correlationAssumption ? [correlationAssumption, ...(assumptionSource.aiAssumptions ?? [])] : assumptionSource.aiAssumptions ?? []} />
       </Section>
 
@@ -253,14 +256,18 @@ function Section({ title, description, children }: { title: string; description:
   );
 }
 
-function SerpConclusionPanel({ conclusion }: { conclusion: string | null }) {
+function SerpConclusionPanel({ conclusion, isHistorical = false }: { conclusion: string | null; isHistorical?: boolean }) {
   if (!conclusion) return null;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>SERP change conclusion</CardTitle>
-        <CardDescription>Brief read on which measured page changes connect with the observed ranking movement.</CardDescription>
+        <CardTitle>{isHistorical ? 'Last movement conclusion' : 'SERP change conclusion'}</CardTitle>
+        <CardDescription>
+          {isHistorical
+            ? 'Preserved read from the most recent check where this URL moved.'
+            : 'Brief read on which measured page changes connect with the observed ranking movement.'}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <p className="max-w-5xl text-sm leading-6 text-slate-300">{conclusion}</p>
@@ -861,11 +868,15 @@ function buildCorrelationAssumption(page: CompetitorSnapshotRow, currentCaptured
   const movementText = movement === null ? 'had no recorded rank delta' : formatPositionDelta(movement).toLowerCase();
   const severity = diffs.reduce((total, diff) => total + diff.severity, 0);
   const confidence = Math.min(85, Math.max(35, 40 + Math.min(30, Math.abs(movement ?? 0) * 5) + Math.min(15, Math.round(severity / 40))));
+  const topImpact = evidenceRows
+    .slice(0, 2)
+    .map((row) => `${row.signal.toLowerCase()} (${row.change.toLowerCase()})`)
+    .join('; ');
 
   return {
     assumptionType: 'ranking-content correlation',
     confidence,
-    summary: `Between ${window}, this URL ${movementText}.`,
+    summary: `Between ${window}, this URL ${movementText}.${topImpact ? ` Most likely impact signals: ${topImpact}.` : ''}`,
     structured: {
       window,
       movement: movementText,

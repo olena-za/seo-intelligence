@@ -105,4 +105,6 @@ export type CompetitorSnapshotRow = {
     summary?: string;
     confidence?: number;
   }>;
+  keyword?: string | null;
+  capturedAt?: string;
 };
