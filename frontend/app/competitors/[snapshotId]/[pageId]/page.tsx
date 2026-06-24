@@ -90,6 +90,7 @@ export default async function CompetitorPageDetail({ params }: { params: Promise
   const comparisonWindow = hasPreviousCheck
     ? `${formatDateTime(page.previousCheck?.capturedAt)} to ${formatDateTime(snapshot.capturedAt)}`
     : null;
+  const hasDiffRows = (page.diffs ?? []).length > 0;
   const correlationAssumption = buildCorrelationAssumption(assumptionSource, snapshot.capturedAt);
   const serpConclusion = buildSerpChangeConclusion(assumptionSource, snapshot.keyword);
 
@@ -208,7 +209,7 @@ export default async function CompetitorPageDetail({ params }: { params: Promise
         <AssumptionList rows={correlationAssumption ? [correlationAssumption, ...(assumptionSource.aiAssumptions ?? [])] : assumptionSource.aiAssumptions ?? []} />
       </Section>
 
-      {hasPreviousCheck && hasMovement ? (
+      {hasPreviousCheck && hasDiffRows ? (
         <Section title="Historical diff panels" description={`Deterministic before/after comparison for ${comparisonWindow}.`}>
           <DiffTable rows={page.diffs ?? []} />
         </Section>

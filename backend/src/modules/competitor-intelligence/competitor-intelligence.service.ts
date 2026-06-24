@@ -252,8 +252,7 @@ export class CompetitorIntelligenceService {
             competitorSnapshotId: previousCheck.competitorSnapshotId,
           }
         : null,
-      diffs:
-        previousCheck && currentHistory?.positionDelta ? competitor.currentDiffs : [],
+      diffs: previousCheck ? competitor.currentDiffs : [],
       internalLinkItems,
       aiAssumptions: competitor.aiAssumptions,
       keyword: keyword ?? null,
@@ -289,13 +288,10 @@ export class CompetitorIntelligenceService {
         keywordSnapshot: { keyword },
       },
       include: { extractedFeatures: true, keywordSnapshot: true },
+      orderBy: { keywordSnapshot: { capturedAt: 'desc' } },
       take: 10,
     });
-    const previousCompetitor = previousCompetitors.sort(
-      (a, b) =>
-        b.keywordSnapshot.capturedAt.getTime() -
-        a.keywordSnapshot.capturedAt.getTime(),
-    )[0];
+    const previousCompetitor = previousCompetitors[0];
     const previousFeatures = previousCompetitor?.extractedFeatures;
     const preCrawlQuality = this.quality.classifyBeforeCrawl({
       url,
@@ -341,22 +337,6 @@ export class CompetitorIntelligenceService {
         positionDelta: previous ? previous.position - position : undefined,
       },
     });
-
-    if (previous && previous.position === position) {
-      await this.prisma.competitorSnapshot.update({
-        where: { id: competitor.id },
-        data: {
-          crawlStatus: 'skipped',
-          processingSkipped: true,
-          skipReason: 'No position movement since prior check',
-          crawlError: 'No position movement since prior check',
-        },
-      });
-      this.logger.log(
-        `[CompetitorIntel] Skipping crawl/extraction (no movement) position=${position} domain=${domain}`,
-      );
-      return;
-    }
 
     if (preCrawlQuality.processingSkipped) {
       this.logger.warn(
@@ -717,10 +697,7 @@ function mapSnapshot(snapshot: any, historicalRanking: any[] = []) {
               competitorSnapshotId: previousCheck.competitorSnapshotId,
             }
           : null,
-        diffs:
-          previousCheck && currentHistory?.positionDelta
-            ? competitor.currentDiffs
-            : [],
+        diffs: previousCheck ? competitor.currentDiffs : [],
         internalLinkItems,
         aiAssumptions: competitor.aiAssumptions,
       };
